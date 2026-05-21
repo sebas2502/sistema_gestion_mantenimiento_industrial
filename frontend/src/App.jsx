@@ -4,6 +4,7 @@ import Activos from './pages/Activos';
 import Incidencias from './pages/Incidencias';
 import Mantenimiento from './pages/Mantenimiento';
 import Dashboard from './pages/Dashboard';
+import GestionPlanesPreventivos from './pages/GestionPlanesPreventivos';
 
 const App = () => {
   // Estado para controlar la pestaña activa del sistema
@@ -18,6 +19,7 @@ const App = () => {
     { id: 'assets', label: 'Inventario de Activos', icon: '⚙️' },
     { id: 'incidents', label: 'Incidencias y OTs', icon: '⚠️' },
     { id: 'maintenance', label: 'Mantenimiento', icon: ' M '},
+    { id: 'plains', label: 'Planes Preventivos', icon: ' PP '}
   ];
 
   // Renderizado condicional de las vistas
@@ -36,8 +38,12 @@ const App = () => {
         return <Mantenimiento />;
       case 'incidents':
         return <Incidencias />;
+
+      case 'plains':
+        return <GestionPlanesPreventivos />
+
       default:
-        return <Usuarios />;
+        return <Dashboard />;
     }
   };
 

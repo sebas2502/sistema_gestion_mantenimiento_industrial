@@ -3,6 +3,8 @@ import { Usuario } from "../models/Usuario";
 import { Activo } from "../models/Activo";
 import { Incidencia } from "../models/Incidencia";
 import { OrdenTrabajo } from "../models/OrdenTrabajo";
+import { PlanPreventivo } from "../models/PlanPreventivo";
+import { TareaPreventiva } from "../models/TareaPreventiva";
 
 import dotenv from "dotenv";
 
@@ -17,7 +19,7 @@ export const AppDataSource = new DataSource({
     database: process.env.DB_NAME || "gestion_mantenimiento",
     synchronize: true, // Tip: usar true solo en desarrollo para que cree las tablas solas
     logging: false,
-    entities: [Usuario, Activo, Incidencia, OrdenTrabajo],
+    entities: [Usuario, Activo, Incidencia, OrdenTrabajo, PlanPreventivo, TareaPreventiva],
     migrations: [],
     subscribers: [],
 });

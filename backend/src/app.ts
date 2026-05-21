@@ -7,6 +7,7 @@ import activoRoutes from "./routes/activoRoutes";
 import incideniasRoutes from "./routes/incidenciaRoutes";
 import ordenTrabajoRoutes from "./routes/ordenTrabajoRoutes";
 import dashboardRoutes from "./routes/dashBoardRoutes";
+import planRoutes from "./routes/PlanRoutes";
 
 dotenv.config();
 
@@ -35,3 +36,4 @@ app.use('/api/activos',activoRoutes);
 app.use('/api/incidencias',incideniasRoutes);
 app.use('/api/ordenes',ordenTrabajoRoutes);
 app.use('/api/analisis', dashboardRoutes);
+app.use('/api/planes',planRoutes);

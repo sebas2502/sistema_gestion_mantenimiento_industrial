@@ -2,25 +2,84 @@ import { AppDataSource } from '../config/data-source';
 import { Activo } from '../models/Activo';
 import { Incidencia } from '../models/Incidencia';
 import { OrdenTrabajo } from '../models/OrdenTrabajo';
+import { PlanPreventivo } from '../models/PlanPreventivo'; 
 import { EstadoOT } from '../enums/EstadoOT';
 import { OrdenTrabajoService } from './OrdenTrabajoService';
-import { LessThan , Not, In } from 'typeorm'; // 🔍 AGREGAMOS "In" ACÁ
+import { LessThan, Not, In } from 'typeorm'; 
 import { EstadoActivo } from '../enums/EstadoActivo';
 
 export class DashboardService {
   private activoRepository = AppDataSource.getRepository(Activo);
   private incidenciaRepository = AppDataSource.getRepository(Incidencia);
   private otRepository = AppDataSource.getRepository(OrdenTrabajo);
+  private planRepository = AppDataSource.getRepository(PlanPreventivo); 
   private otService = new OrdenTrabajoService();
 
   async obtenerMetricasYAlertas() {
+    
+    // =================================================================
+    // ⚙️ SUB-MÓDULO: PROCESAMIENTO DE PLANES PREVENTIVOS MULTITAREA (Checklist)
+    // =================================================================
+    const fechaActual = new Date();
+    
+    // 🔍 Traemos los planes incluyendo explícitamente sus tareas asociadas (Checklist)
+    const todosLosPlanes = await this.planRepository.find({ 
+      relations: ['activo', 'tareas'] 
+    });
+
+    for (const plan of todosLosPlanes) {
+      // Si el calendario del plan preventivo se encuentra vencido...
+      if (fechaActual >= plan.fechaProximaFrecuencia) {
+        
+        // Control de Idempotencia basado en el nombre único del Plan Preventivo
+        const otPreventivaExistente = await this.otRepository.findOne({
+          where: {
+            activo: { id: plan.activo.id },
+            estado: In([EstadoOT.PENDIENTE, EstadoOT.EN_PROCESO]),
+            tarea: `Mantenimiento Preventivo: ${plan.nombrePlan}`
+          }
+        });
+
+        if (!otPreventivaExistente) {
+          
+          // 🔍 Compilamos dinámicamente las subtareas para armar la hoja de ruta en formato string
+          const hojaDeRutaChecklist = plan.tareas && plan.tareas.length > 0
+            ? plan.tareas.map((t, index) => `${index + 1}. [ ] ${t.nombre} ➔ Especificación: ${t.especificacion || 'General.'}`).join('\n')
+            : 'No se detallaron subtareas específicas para este plan de mantenimiento.';
+
+          // Emitimos una ÚNICA Orden de Trabajo conteniendo todo el protocolo de parada
+          await this.otService.crearOrden(
+            {
+              tarea: `Mantenimiento Preventivo: ${plan.nombrePlan}`,
+              detalles: `ALERTA CALENDARIO PREVENTIVO: Ciclo programado cada ${plan.frecuenciaDias} días.\n\nPROTOCOLOS Y PASOS DE CONTROL REQUERIDOS:\n${hojaDeRutaChecklist}`,
+            },
+            plan.activo.id,
+            undefined // Queda a la espera de que el Supervisor designe un operario en el Frontend
+          );
+
+          // Avanzamos el calendario del plan para el próximo vencimiento sistemático
+          plan.fechaUltimaFrecuencia = new Date();
+          
+          const nuevaProximaFecha = new Date();
+          nuevaProximaFecha.setDate(nuevaProximaFecha.getDate() + plan.frecuenciaDias);
+          plan.fechaProximaFrecuencia = nuevaProximaFecha;
+
+          await this.planRepository.save(plan);
+        }
+      }
+    }
+
+    // =================================================================
     // 1. CONTEOS BÁSICOS PARA LAS TARJETAS (KPIs)
+    // =================================================================
     const totalActivos = await this.activoRepository.count();
     const otsPendientes = await this.otRepository.count({ where: { estado: EstadoOT.PENDIENTE } });
     const otsEnProceso = await this.otRepository.count({ where: { estado: EstadoOT.EN_PROCESO } });
     const incidenciasAbiertas = await this.incidenciaRepository.count({ where: { estado: 'Abierta' } });
 
+    // =================================================================
     // 2. CÁLCULO DE DISPONIBILIDAD GLOBAL DE PLANTA
+    // =================================================================
     const activosOperativos = await this.activoRepository.createQueryBuilder('activo')
       .where('activo.estado != :estado', { estado: 'Fuera de Servicio' })
       .andWhere('activo.estado != :inactivo', { inactivo: 'Inactivo' })
@@ -28,7 +87,9 @@ export class DashboardService {
     
     const disponibilidadGlobal = totalActivos > 0 ? Math.round((activosOperativos / totalActivos) * 100) : 100;
 
+    // =================================================================
     // 3. ALGORITMO INTELIGENTE: ANÁLISIS DE MTBF Y PATRONES DE DETERIORO
+    // =================================================================
     const todosLosActivos = await this.activoRepository.find({
       where: {
         estado: Not(EstadoActivo.INACTIVO)
@@ -73,19 +134,15 @@ export class DashboardService {
             diagnostico: 'Deterioro Acelerado: El intervalo entre fallas se está reduciendo críticamente.'
           });
 
-          // =================================================================
-          // 🔥 DISPARADOR AUTÓNOMO CORREGIDO (COMPROBACIÓN DE IDEMPOTENCIA)
-          // =================================================================
-          const otExistente = await this.otRepository.findOne({
+          const otPredictivaExistente = await this.otRepository.findOne({
             where: {
               activo: { id: activo.id },
-              // 🔍 Usamos In([ ... ]) para verificar si ya existe en cualquiera de los dos estados activos
               estado: In([EstadoOT.PENDIENTE, EstadoOT.EN_PROCESO]), 
               tarea: `Inspección Predictiva Automatizada - MTBF Crítico`
             }
           });
 
-          if (!otExistente) {
+          if (!otPredictivaExistente) {
             await this.otService.crearOrden(
               {
                 tarea: `Inspección Predictiva Automatizada - MTBF Crítico`,
