@@ -1,7 +1,7 @@
 export enum Rol {
-    ADMINISTRADOR = "administrador",
-    INGENIERO = "ingeniero",
-    SUPERVISOR = "supervisor",
-    TECNICO = "tecnico_mantenimiento",
-    OPERARIO = "operario"
+    ADMINISTRADOR = "ADMINISTRADOR",
+    INGENIERO = "INGENIERO",
+    SUPERVISOR = "SUPERVISOR",
+    TECNICO = "TECNICO_MANTENIMIENTO",
+    OPERARIO = "OPERARIO"
 }

@@ -1,26 +1,77 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Usuarios from './pages/Usuarios';
 import Activos from './pages/Activos';
 import Incidencias from './pages/Incidencias';
 import Mantenimiento from './pages/Mantenimiento';
 import Dashboard from './pages/Dashboard';
 import GestionPlanesPreventivos from './pages/GestionPlanesPreventivos';
+import Login from './pages/Login'; // Importación de la nueva vista de acceso
+import { cerrarSesion } from './api/auth';
 
 const App = () => {
+  // Estado para el usuario autenticado (guarda: { id, nombre, rol })
+  const [usuario, setUsuario] = useState(null);
+  // Control de carga inicial mientras lee el almacenamiento local
+  const [checkingAuth, setCheckingAuth] = useState(true);
   // Estado para controlar la pestaña activa del sistema
-  const [activeTab, setActiveTab] = useState('users');
+  const [activeTab, setActiveTab] = useState('incidents'); // Seteamos incidencias por defecto para planta
   // Estado para controlar el menú lateral en dispositivos móviles
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Menú de navegación basado en tus Requerimientos Funcionales
+  // 🛡️ Efecto para validar si ya existe una sesión remanente en la máquina
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const usuarioGuardado = localStorage.getItem('usuario');
+    
+    if (token && usuarioGuardado) {
+      setUsuario(JSON.parse(usuarioGuardado));
+    }
+    setCheckingAuth(false);
+  }, []);
+
+  const handleLoginSuccess = (usuarioLogueado) => {
+    setUsuario(usuarioLogueado);
+    // Redirección inteligente de pantalla según privilegios de rol al ingresar
+    if (usuarioLogueado.rol === 'OPERARIO') {
+      setActiveTab('incidents');
+    } else if (usuarioLogueado.rol === 'TECNICO_MANTENIMIENTO'){
+      setActiveTab('maintenance')
+    }else{
+      setActiveTab('dashboard');
+    }
+  };
+
+  const handleLogout = () => {
+    cerrarSesion();
+    setUsuario(null);
+  };
+
+  // 🔐 Menú mapeado con restricciones estrictas de rol
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard / KPIs', icon: '📊' },
-    { id: 'users', label: 'Control de Personal', icon: '👥' },
-    { id: 'assets', label: 'Inventario de Activos', icon: '⚙️' },
-    { id: 'incidents', label: 'Incidencias y OTs', icon: '⚠️' },
-    { id: 'maintenance', label: 'Mantenimiento', icon: ' M '},
-    { id: 'plains', label: 'Planes Preventivos', icon: ' PP '}
+    { id: 'dashboard', label: 'Dashboard / KPIs', icon: '📊', rolesPermitidos: ['SUPERVISOR', 'ADMINISTRADOR'] },
+    { id: 'users', label: 'Control de Personal', icon: '👥', rolesPermitidos: ['ADMINISTRADOR'] },
+    { id: 'assets', label: 'Inventario de Activos', icon: '⚙️', rolesPermitidos: ['SUPERVISOR', 'ADMINISTRADOR'] },
+    { id: 'incidents', label: 'Incidencias y OTs', icon: '⚠️', rolesPermitidos: ['OPERARIO', 'SUPERVISOR', 'ADMINISTRADOR'] },
+    { id: 'maintenance', label: 'Mantenimiento', icon: ' M ', rolesPermitidos: ['SUPERVISOR', 'ADMINISTRADOR','TECNICO_MANTENIMIENTO'] },
+    { id: 'plains', label: 'Planes Preventivos', icon: ' PP ', rolesPermitidos: ['SUPERVISOR', 'ADMINISTRADOR'] }
   ];
+
+  // Pantalla de carga preventiva (Evita parpadeos de interfaz)
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-950 font-mono text-xs flex items-center justify-center text-slate-400 uppercase tracking-widest animate-pulse">
+        Sincronizando Estado del Nodo...
+      </div>
+    );
+  }
+
+  // 🛑 GUARDA DE ACCESO PRINCIPAL: Si no hay sesión, fuerza el Login
+  if (!usuario) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  // Filtrado de la barra lateral en base al rol del usuario logueado
+  const menuFiltrado = menuItems.filter(item => item.rolesPermitidos.includes(usuario.rol));
 
   // Renderizado condicional de las vistas
   const renderContent = () => {
@@ -32,18 +83,20 @@ const App = () => {
         return <Activos />;
       
       case 'dashboard':
-        return <Dashboard />
+        return <Dashboard />;
 
       case 'maintenance':
         return <Mantenimiento />;
+      
       case 'incidents':
-        return <Incidencias />;
+        // Le pasamos el objeto usuario por prop por si lo usás internamente
+        return <Incidencias usuarioActual={usuario} />;
 
       case 'plains':
-        return <GestionPlanesPreventivos />
+        return <GestionPlanesPreventivos />;
 
       default:
-        return <Dashboard />;
+        return <Incidencias usuarioActual={usuario} />;
     }
   };
 
@@ -80,17 +133,15 @@ const App = () => {
             </div>
           </div>
 
-          {/* Estado del Servidor Simulada */}
+          {/* Monitor del Rol Activo */}
           <div className="p-4 mx-4 my-3 bg-slate-950/60 border border-slate-800/80 rounded flex items-center justify-between font-mono text-[10px]">
-            <span className="text-slate-500 uppercase">Nodo Central:</span>
-            <span className="text-emerald-400 font-bold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span> ONLINE
-            </span>
+            <span className="text-slate-500 uppercase">Rango Asignado:</span>
+            <span className="text-amber-400 font-bold tracking-wider">[{usuario.rol}]</span>
           </div>
 
-          {/* Menú de Opciones */}
+          {/* Menú de Opciones Filtrado dinámicamente */}
           <nav className="px-4 space-y-1">
-            {menuItems.map((item) => {
+            {menuFiltrado.map((item) => {
               const isActive = activeTab === item.id;
               return (
                 <button
@@ -115,15 +166,23 @@ const App = () => {
           </nav>
         </div>
 
-        {/* Footer del Panel con Datos del Operador */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/40 font-mono text-[11px] text-slate-500">
-          <div>SESIÓN: ADMINISTRADOR</div>
-          <div className="text-slate-600">PLANTA: HILANDERÍA</div>
+        {/* Footer del Panel con Datos del Operador y Botón de Desconexión */}
+        <div className="p-4 border-t border-slate-800 bg-slate-950/40 font-mono text-[11px] flex flex-col gap-2">
+          <div className="text-slate-500">
+            <div>OPERADOR: <span className="text-slate-300 font-bold">{usuario.nombre.toUpperCase()}</span></div>
+            <div className="text-slate-600 mt-0.5">PLANTA: HILANDERÍA</div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="w-full mt-1 py-1.5 bg-slate-950 hover:bg-red-950/40 border border-slate-850 hover:border-red-900/60 text-slate-500 hover:text-red-400 transition-all rounded text-[10px] font-bold uppercase tracking-wider"
+          >
+            ❌ Desconectar Nodo
+          </button>
         </div>
       </aside>
 
-      {/* CONTENEDOR PRINCIPAL DE CONTENIDO */}
-      <main className="flex-1 overflow-y-auto bg-slate-950 min-h-[calc(100vh-60px)] md:min-h-screen">
+      {/* CONTENEDOR PRINCIPAL DE CONTENIDO (Alineado al inicio vertical de forma estricta) */}
+      <main className="flex-1 overflow-y-auto bg-slate-950 min-h-[calc(100vh-60px)] md:min-h-screen flex flex-col items-start justify-start">
         {renderContent()}
       </main>
 

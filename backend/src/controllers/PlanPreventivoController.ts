@@ -12,7 +12,7 @@ export class PlanPreventivoController {
   async listarPlanes(req: Request, res: Response) {
     try {
       const planes = await this.planRepository.find({
-        relations: ['activo', 'tareas'],
+        relations: ['activo', 'tareas'],                    
         order: { fechaRegistro: 'DESC' }
       });
       
